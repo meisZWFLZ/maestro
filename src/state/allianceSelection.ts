@@ -13,8 +13,8 @@ interface Alliance {
 interface AllianceSelectionStatus {
     picking: TeamId | null
     selected: TeamId | null
-    eligible: Array<TeamId>
-    remaining: Array<TeamId>
+    eligible: Array<TeamId>     // eligible to be picked but not be captain
+    remaining: Array<TeamId>    // superset of eligible; may be captain
     alliances: Array<Alliance>
 }
 

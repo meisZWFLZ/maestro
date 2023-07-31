@@ -15,9 +15,16 @@ describe('Alliance selection logic', () => {
         allianceSel = new AllianceSelection(teams);
     });
 
+    /**
+     * Alliance selection initialization tests
+     */
     describe('Alliance selection initialization', () => {
         it('The top ranked team shall be picking.', () => {
             expect(allianceSel.state.picking).toBe('1');
+        });
+
+        it('The currently selected team shall be null.', () => {
+            expect(allianceSel.state.selected).toBe(null);
         });
 
         it('The top ranked team shall not be in the eligible list.', () => {
@@ -30,5 +37,20 @@ describe('Alliance selection logic', () => {
             }
             expect(found).toBe(false);
         });
+
+        it('The top ranked team shall not be in the remaining list.', () => {
+            let found: boolean = false;
+            for(let i = 0; i < allianceSel.state.remaining.length; i++) {
+                if(allianceSel.state.remaining[i] === '1' as TeamId) {
+                    found = true;
+                    break;
+                }
+            }
+            expect(found).toBe(false);
+        });
     });
+
+    /**
+     * Alliance selection pick tests
+     */
 });
