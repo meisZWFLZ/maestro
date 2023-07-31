@@ -1,193 +1,166 @@
-import { COMPETITION_STAGE, IAllianceSelectionStatus, IAllianceTeams, MESSAGE_TYPE, TeamId } from "@18x18az/rosetta";
-import { setCompetitionStage } from "../handlers/stage";
-import { getNumber } from "../handlers/teams";
-import { record, IMetadata, LogType } from "../utils/log";
-import { broadcast } from "../utils/wss";
+import { Team } from "@18x18az/rosetta";
 
 
 let MAX_NUM_ALLIANCES = 16;
 
+export type TeamId = string;
+
+interface Alliance {
+    team1: TeamId
+    team2?: TeamId
+}
+
+interface AllianceSelectionStatus {
+    picking: TeamId | null
+    selected: TeamId | null
+    eligible: Array<TeamId>
+    remaining: Array<TeamId>
+    alliances: Array<Alliance>
+}
+
 export class AllianceSelection {
 
     // current state
-    state: IAllianceSelectionStatus = {
-        picking: null,
-        selected: null,
+    state: AllianceSelectionStatus = {
         eligible: [],
         remaining: [],
-        alliances: []
+        alliances: [],
+        picking: null,
+        selected: null
     };
 
-    // a stack of previous states
-    history: Array<IAllianceSelectionStatus> = [];
+    // TODO: track changes/history
 
     /*
     precondition for constructor:
     - teams must already be sorted, from first seed -> lowest seed
     */
-    constructor(teams: Array<TeamId>, meta: IMetadata){
+    constructor(teams: Array<TeamId>) {
 
         // copy teams into eligible and remaining
         this.state.eligible = [...teams];
         this.state.remaining = [...teams];
-        this.state.selected = ""
-        this.getNextPicker(meta);
-        this.onUpdate(meta);
-        setCompetitionStage(meta, COMPETITION_STAGE.ALLIANCE);
+        this.state.selected = null;
+        this.getNextPicker();
+        this.onUpdate();
     }
 
-    pick(team: TeamId, meta: IMetadata){
-
-        if(!this.state.eligible.includes(team)){
-            record(meta, LogType.ERROR, getNumber(team) + " is not in eligible")
+    pick(team: TeamId) {
+        if(!this.state.eligible.includes(team)) {
             return;
         }
 
         this.state.selected = team;
+    } // end pick()
 
-        record(meta, LogType.LOG, getNumber(this.state.picking) + " has selected " + getNumber(this.state.selected));
-        this.broadcastState(meta);
-    } // end pick
-
-    cancel(meta: IMetadata){
-        record(meta, LogType.LOG, "cancelling current selection");
-        if(!this.state.selected) {
-            record(meta, LogType.ERROR, "No team selected");
-        } else {
+    cancel() {
+        if(this.state.selected) {
             this.state.selected = null;
-            this.broadcastState(meta);
         }
-    }
+    } // end cancel()
 
-    accept(meta: IMetadata){
-
-        if(this.state.selected == ""){
-            record(meta, LogType.ERROR, "selected is empty");
+    accept() {
+        if(!this.state.selected) {
             return;
         }
 
-        // remove from eligible and remaining
-        for(let i = 0; i < this.state.eligible.length; i++){
-            if(this.state.selected == this.state.eligible[i]){
+        let found: boolean = false;
+        for(let i = 0; i < this.state.eligible.length; i++) {
+            if(this.state.selected == this.state.eligible[i]) {
                 this.state.eligible.splice(i, 1);
+                found = true;
                 break;
             }
         }
 
-        for(let i = 0; i < this.state.remaining.length; i++){
-            if(this.state.selected == this.state.remaining[i]){
+        if(!found) {
+            return;
+        }
+
+        found = false;
+        for(let i = 0; i < this.state.remaining.length; i++) {
+            if(this.state.selected == this.state.remaining[i]) {
                 this.state.remaining.splice(i, 1);
+                found = true;
                 break;
             }
         }
 
-        // make an alliance object and add it to this.state.alliances
-        let alliance: IAllianceTeams = {
-            team1: this.state.picking as string,
-            team2: this.state.selected as string
+        if(!found) {
+            return;
+        }
+
+        let alliance: Alliance = {
+            team1: this.state.picking as TeamId,
+            team2: this.state.selected as TeamId
         };
         this.state.alliances.push(alliance);
-        
-        
-        record(meta, LogType.LOG, getNumber(this.state.selected) + " has accepted " + getNumber(this.state.picking));
-        this.state.selected = "";
-        // before getting the next picker, make sure we have teams remaining or 
-        // we have already reached the max number of alliances
 
-        if(this.state.alliances.length == MAX_NUM_ALLIANCES || this.state.remaining.length == 0 || this.state.eligible.length < 2){
-            this.selectionComplete(meta);
+
+        this.state.selected = null;
+
+        if(this.state.alliances.length == MAX_NUM_ALLIANCES || this.state.remaining.length == 0 || this.state.eligible.length < 2) {
+            this.selectionComplete();
             return;
         }
 
-        this.getNextPicker(meta);
-        this.onUpdate(meta);
-    } // end accept
+        this.getNextPicker();
+    } // end accept()
 
-    decline(meta: IMetadata){
-        
-        if(this.state.selected == ""){
-            record(meta, LogType.ERROR, "selected is empty");
+    decline() {
+        if(!this.state.selected) {
             return;
         }
 
-        // remove selected from eligible
-        for(let i = 0; i < this.state.eligible.length; i++){
-            if(this.state.selected == this.state.eligible[i]){
+        let found: boolean = false;
+        for(let i = 0; i < this.state.eligible.length; i++) {
+            if(this.state.selected == this.state.eligible[i]) {
+                this.state.eligible.splice(i, 1);
+                found = true;
+                break;
+            }
+        }
+
+        if(!found) {
+            return;
+        }
+
+        this.state.selected = null;
+
+        if(this.state.eligible.length == 0){
+            this.selectionComplete();
+        }
+    } // end decline()
+
+    /**
+     * Promote the next eligible team to be team captain.
+     */
+    getNextPicker() {
+        this.state.picking = this.state.remaining.shift() as TeamId;
+
+        for(let i = 0; i < this.state.eligible.length; i++) {
+            if(this.state.picking == this.state.eligible[i]) {
                 this.state.eligible.splice(i, 1);
                 break;
             }
         }
-        
-        record(meta, LogType.LOG, getNumber(this.state.selected) + " has declined " + getNumber(this.state.picking));
-        this.state.selected = "";
-        this.onUpdate(meta);
-        // if eligible.length becomes 0 as a result, then we are done and call selectionComplete
-        if(this.state.eligible.length == 0){
-            this.selectionComplete(meta);
+    } // end getNextPicker()
+
+    undo() {
+    } // end undo()
+
+    noShow() {
+        this.getNextPicker();
+
+        if(this.state.eligible.length == 0) {
+            this.selectionComplete();
         }
-    }
+    } // end noShow()
 
-    getNextPicker(meta: IMetadata){
+    selectionComplete() {
+    } // end selectionComplete()
 
-        this.state.picking = this.state.remaining.shift() as string;
+    onUpdate() {
+    } // end onUpdate()
 
-        for(let i = 0; i < this.state.eligible.length; i++){
-            if(this.state.picking == this.state.eligible[i]){
-                this.state.eligible.splice(i, 1);
-                break;
-            }
-        }
-        record(meta, LogType.LOG, getNumber(this.state.picking) + " is now picking");
-    }
-
-    undo(meta: IMetadata){
-        if(this.history.length == 1){
-            record(meta, LogType.ERROR, "history is empty");
-            return;
-        }
-        
-        let pState: IAllianceSelectionStatus = this.history.splice(this.history.length-2, 1)[0] as IAllianceSelectionStatus;
-        this.state = pState;
-        console.log("previous picking: " + pState.picking);
-        console.log("previous selected: " + pState.selected);
-
-        record(meta, LogType.LOG, "undoing action")
-        console.log("now picking: " + this.state.picking);
-        console.log("currently selected: " + this.state.selected);
-        this.broadcastState(meta);
-    }
-
-    noShow(meta: IMetadata){
-        record(meta, LogType.LOG, `${getNumber(this.state.picking)} is a no show`);
-        this.getNextPicker(meta);
-        this.onUpdate(meta);
-
-        if(this.state.eligible.length == 0){
-            this.selectionComplete(meta);
-        }
-    }
-
-    selectionComplete(meta: IMetadata){
-
-        let output = "selection is now complete, alliances are:\n";
-        for(let i = 0; i < this.state.alliances.length; i++){
-            output += "seed " + (i+1) + ": " + this.state.alliances[i].team1 + " and " + this.state.alliances[i].team2 + "\n";
-        }
-        record(meta, LogType.LOG, output);
-        this.state.picking = null;
-        this.broadcastState(meta);
-    }
-
-    onUpdate(meta: IMetadata){
-        this.history.push(JSON.parse(JSON.stringify(this.state)));
-        this.broadcastState(meta);
-    }
-
-    broadcastState(meta: IMetadata){
-        broadcast(meta, {
-            type: MESSAGE_TYPE.POST,
-            path: ['allianceSelection'],
-            payload: this.state
-        });
-    }
 }
