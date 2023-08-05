@@ -29,6 +29,7 @@ model Team {
   ageGroup      String
   checkIn       CheckIn?
   checkedPoints CheckedInspection[]
+  selection     AllianceSelectionStatus?
 }
 
 model CheckIn {
@@ -58,4 +59,35 @@ model CheckedInspection {
   criteriaId Int
 
   @@unique([teamNumber, criteriaId])
+}
+
+model EliminationAlliance {
+  divisionId    Int
+  seed          Int
+  captainNumber String
+  pickNumber    String
+
+  @@unique([captainNumber, pickNumber])
+  @@unique([divisionId, seed])
+}
+
+model AllianceSelectionStatus {
+  divisionId  Int
+  team        Team    @relation(fields: [teamNumber], references: [number])
+  teamNumber  String  @unique
+  status      String
+  // TODO status enum:
+  // captain: currently inviting
+  // invited: invited by captain
+  // eligible: may be picked but not be captain
+  // remaining: can be both picked or be captain
+
+  @@unique([divisionId, teamNumber]) // TODO necessary/nice?
+}
+
+model AllianceSelectionAction {
+  divisionId  Int @unique
+  teamNumber  String
+  action      String
+  // TODO action enum
 }
