@@ -5,6 +5,11 @@ import { PrismaService } from '../../utils/prisma/prisma.service'
 export class AllianceSelectionDatabase {
     constructor (private readonly prisma: PrismaService) {} // TODO cache?
 
+    // load teams
+    async addQualRanking (division: number, team: string, ranking: number) {
+        //this.prisma.QualRankings.upsert
+    }
+
     // initialize status (?)
 
     // update alliance selection status

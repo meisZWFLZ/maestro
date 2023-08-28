@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Controller, Get, Param, Post, Body, Query } from '@nestjs/common'
 import { EventPattern } from '@nestjs/microservices'
 import { AllianceSelectionService } from './allianceselection.service'
 
@@ -9,12 +9,12 @@ export class AllianceSelectionController {
     }
 
     @Post(':division/rankings')
-    async setRankings (@Param() params: any, @Query() query: any): Promise<void> {
-        
+    async setRankings (@Param() params: any, @Body() body: any): Promise<void> {
+        this.allianceSelectionService.loadRankings(params.division, body.teams);
     }
 
     @Post(':division/pick')
-    async pick (@Param() params: any): Promise<void> {
+    async pick (@Param() params: any, @Query() query: any): Promise<void> {
 
     }
 
