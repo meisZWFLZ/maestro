@@ -3,7 +3,7 @@ import { PrismaService } from '../../utils/prisma/prisma.service'
 
 @Injectable()
 export class AllianceSelectionDatabase {
-    constructor (private readonly prisma: PrismaService) {}
+    constructor (private readonly prisma: PrismaService) {} // TODO cache?
 
     // initialize status (?)
 

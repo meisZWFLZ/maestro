@@ -30,6 +30,7 @@ model Team {
   checkIn       CheckIn?
   checkedPoints CheckedInspection[]
   selection     AllianceSelectionStatus?
+  raking        QualRankings?
 }
 
 model CheckIn {
@@ -61,6 +62,13 @@ model CheckedInspection {
   @@unique([teamNumber, criteriaId])
 }
 
+model QualRankings {
+  divisionId Int
+  team Team @relation(fields: [teamNumber], references: [number])
+  teamNumber String @unique
+  ranking Int
+}
+
 model EliminationAlliance {
   divisionId    Int
   seed          Int
@@ -89,5 +97,11 @@ model AllianceSelectionAction {
   divisionId  Int @unique
   teamNumber  String
   action      String
+  datestamp Int // epoch
   // TODO action enum
+}
+
+model AllianceSelectionCurrentPick {
+  divisionId Int @unique
+  currentPickedTeam String
 }
